@@ -133,26 +133,42 @@ const DrinkSearchSection = () => {
       // Step 1: 尝试调用高德POI搜索
       try {
         nearbyStores = await searchNearbyDrinkStores(coordinates.lng, coordinates.lat);
+        console.log('[SipWise] 高德POI返回:', nearbyStores.length, '家店铺');
         if (nearbyStores.length === 0) {
           throw new Error('高德返回空结果');
         }
       } catch (amapError) {
-        console.warn('高德POI搜索失败，使用Supabase fallback:', amapError);
-        // 使用Supabase作为fallback
+        console.warn('[SipWise] 高德POI搜索失败，使用Supabase fallback:', amapError.message);
         nearbyStores = await getNearbyStoresFromSupabase(coordinates.lng, coordinates.lat);
         usingFallback = true;
         setIsUsingFallback(true);
+        console.log('[SipWise] Supabase fallback返回:', nearbyStores.length, '家店铺');
       }
 
       // Step 2: 提取品牌名
-      const storesWithBrands = nearbyStores.map(store => ({
+      // 对Supabase fallback的店铺，优先使用数据库中已有的brandName
+      // 对高德POI的店铺，通过品牌映射表提取
+      let storesWithBrands = nearbyStores.map(store => ({
         ...store,
-        brandName: extractBrandFromStoreName(store.name)
-      })).filter(store => store.brandName); // 只保留识别到品牌的店铺
+        brandName: store.brandName || extractBrandFromStoreName(store.name)
+      })).filter(store => store.brandName);
+
+      console.log('[SipWise] 识别品牌的店铺:', storesWithBrands.length);
+
+      // 如果高德路径没有识别到任何品牌，自动切换到Supabase fallback
+      if (!usingFallback && storesWithBrands.length === 0) {
+        console.warn('[SipWise] 高德结果无可识别品牌，切换到Supabase fallback');
+        nearbyStores = await getNearbyStoresFromSupabase(coordinates.lng, coordinates.lat);
+        storesWithBrands = nearbyStores.filter(store => store.brandName);
+        usingFallback = true;
+        setIsUsingFallback(true);
+        console.log('[SipWise] Supabase fallback返回:', storesWithBrands.length, '家有品牌的店铺');
+      }
 
       // Step 3: 获取所有识别到的品牌
       const recognizedBrands = [...new Set(storesWithBrands.map(store => store.brandName))];
-      
+      console.log('[SipWise] 识别到的品牌:', recognizedBrands);
+
       if (recognizedBrands.length === 0) {
         setRecommendations([]);
         return;
@@ -160,25 +176,27 @@ const DrinkSearchSection = () => {
 
       // Step 4: 查询匹配的饮品
       const matchedDrinks = await searchDrinksByBrandsAndTags(recognizedBrands, activeTags);
-      
+      console.log('[SipWise] 匹配的饮品:', matchedDrinks.length, '款');
+
       // Step 5: 合并结果
       const recommendationsWithDrinks = storesWithBrands.map(store => {
-        const storeMatchedDrinks = matchedDrinks.filter(drink => 
+        const storeMatchedDrinks = matchedDrinks.filter(drink =>
           drink.brand_name === store.brandName
         );
         return {
           ...store,
-          matchedDrinks: storeMatchedDrinks // 修复：使用storeMatchedDrinks而不是matchedDrinks
+          matchedDrinks: storeMatchedDrinks
         };
-      }).filter(store => store.matchedDrinks.length > 0); // 只保留有匹配饮品的店铺
+      }).filter(store => store.matchedDrinks.length > 0);
 
       // 按距离排序
       recommendationsWithDrinks.sort((a, b) => a.distance - b.distance);
-      
+
+      console.log('[SipWise] 最终推荐:', recommendationsWithDrinks.length, '家店铺');
       setRecommendations(recommendationsWithDrinks);
     } catch (err) {
       setError('搜索失败，请稍后重试');
-      console.error('推荐搜索失败:', err);
+      console.error('[SipWise] 推荐搜索失败:', err);
     } finally {
       setIsSearching(false);
     }

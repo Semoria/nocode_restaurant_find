@@ -1,8 +1,25 @@
 import { supabase } from "@/integrations/supabase/client";
 
+// 将tags字段统一转换为JavaScript数组（兼容不同Supabase平台的返回格式）
+const ensureTagsArray = (tags) => {
+  if (Array.isArray(tags)) return tags;
+  if (typeof tags === 'string') {
+    try {
+      const parsed = JSON.parse(tags);
+      if (Array.isArray(parsed)) return parsed;
+    } catch {
+      // PostgreSQL 原始数组格式: {tag1,tag2,tag3}
+    }
+    return tags.replace(/^\{|\}$/g, '').split(',').map(t => t.trim().replace(/^"|"$/g, ''));
+  }
+  return [];
+};
+
 // 根据品牌名和标签查询匹配的饮品
 export const searchDrinksByBrandsAndTags = async (brands, tags) => {
   try {
+    console.log('[SipWise] 查询饮品 - 品牌:', brands, '标签:', tags);
+
     // 先尝试使用 .overlaps() 查询
     let { data, error } = await supabase
       .from('drinks')
@@ -10,30 +27,46 @@ export const searchDrinksByBrandsAndTags = async (brands, tags) => {
       .in('brand_name', brands)
       .overlaps('tags', tags);
 
+    console.log('[SipWise] overlaps查询结果:', { count: data?.length, error: error?.message });
+
     // 如果 .overlaps() 失败或返回空结果，则使用前端过滤作为兜底
     if (error || !data || data.length === 0) {
-      console.warn('Supabase .overlaps() 查询失败或返回空结果，使用前端过滤作为兜底');
-      
+      console.warn('[SipWise] overlaps不可用或无结果，使用前端过滤兜底');
+
       // 只按品牌查询
       const { data: brandData, error: brandError } = await supabase
         .from('drinks')
         .select('*')
         .in('brand_name', brands);
 
+      console.log('[SipWise] 品牌查询结果:', { count: brandData?.length, error: brandError?.message });
+
       if (brandError) {
-        console.error('Supabase品牌查询失败:', brandError);
+        console.error('[SipWise] Supabase品牌查询失败:', brandError);
         throw brandError;
       }
 
-      // 前端过滤标签交集
-      data = brandData.filter(drink => 
-        drink.tags.some(tag => tags.includes(tag))
-      );
+      if (!brandData || brandData.length === 0) {
+        console.warn('[SipWise] drinks表中没有找到这些品牌的饮品，请检查drinks表是否有数据');
+        return [];
+      }
+
+      // 前端过滤标签交集 — 兼容tags为字符串或数组
+      data = brandData.filter(drink => {
+        const drinkTags = ensureTagsArray(drink.tags);
+        return drinkTags.some(tag => tags.includes(tag));
+      });
+
+      console.log('[SipWise] 前端过滤后匹配饮品:', data.length);
     }
 
-    return data || [];
+    // 确保返回的每个drink的tags都是数组格式
+    return (data || []).map(drink => ({
+      ...drink,
+      tags: ensureTagsArray(drink.tags)
+    }));
   } catch (error) {
-    console.error('数据库查询失败:', error);
+    console.error('[SipWise] 数据库查询失败:', error);
     throw error;
   }
 };

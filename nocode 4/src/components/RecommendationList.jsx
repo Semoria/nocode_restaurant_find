@@ -73,8 +73,8 @@ const RecommendationList = ({ recommendations }) => {
                     </span>
                     <div className="flex items-center space-x-2">
                       <div className="flex space-x-1">
-                        {drink.tags.slice(0, 2).map((tag, tagIndex) => (
-                          <span 
+                        {(Array.isArray(drink.tags) ? drink.tags : []).slice(0, 2).map((tag, tagIndex) => (
+                          <span
                             key={tagIndex}
                             className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded-full"
                           >
