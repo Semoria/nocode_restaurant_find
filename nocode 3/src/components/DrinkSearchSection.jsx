@@ -146,14 +146,15 @@ const DrinkSearchSection = () => {
       }
 
       // Step 2: 提取品牌名
+      // fallback 数据已自带 brandName，高德数据需要从店名中提取
       const storesWithBrands = nearbyStores.map(store => ({
         ...store,
-        brandName: extractBrandFromStoreName(store.name)
+        brandName: store.brandName || extractBrandFromStoreName(store.name || '')
       })).filter(store => store.brandName); // 只保留识别到品牌的店铺
 
       // Step 3: 获取所有识别到的品牌
       const recognizedBrands = [...new Set(storesWithBrands.map(store => store.brandName))];
-      
+
       if (recognizedBrands.length === 0) {
         setRecommendations([]);
         return;
@@ -161,21 +162,21 @@ const DrinkSearchSection = () => {
 
       // Step 4: 查询匹配的饮品
       const matchedDrinks = await searchDrinksByBrandsAndTags(recognizedBrands, activeTags);
-      
-      // Step 5: 合并结果
+
+      // Step 5: 合并结果 — 每个店铺只关联该品牌下匹配标签的饮品
       const recommendationsWithDrinks = storesWithBrands.map(store => {
-        const storeMatchedDrinks = matchedDrinks.filter(drink => 
+        const storeMatchedDrinks = matchedDrinks.filter(drink =>
           drink.brand_name === store.brandName
         );
         return {
           ...store,
-          matchedDrinks
+          matchedDrinks: storeMatchedDrinks
         };
       }).filter(store => store.matchedDrinks.length > 0); // 只保留有匹配饮品的店铺
 
       // 按距离排序
       recommendationsWithDrinks.sort((a, b) => a.distance - b.distance);
-      
+
       setRecommendations(recommendationsWithDrinks);
     } catch (err) {
       setError('搜索失败，请稍后重试');

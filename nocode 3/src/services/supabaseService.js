@@ -3,15 +3,53 @@ import { supabase } from "@/integrations/supabase/client";
 // 根据品牌名和标签查询匹配的饮品
 export const searchDrinksByBrandsAndTags = async (brands, tags) => {
   try {
-    const { data, error } = await supabase
-      .from('drinks')
-      .select('*')
-      .in('brand_name', brands)
-      .overlaps('tags', tags);
+    // 先尝试使用 .overlaps() 过滤标签
+    let data;
+    try {
+      const result = await supabase
+        .from('drinks')
+        .select('*')
+        .in('brand_name', brands)
+        .overlaps('tags', tags);
 
-    if (error) {
-      console.error('Supabase查询失败:', error);
-      throw error;
+      if (result.error) {
+        throw result.error;
+      }
+      data = result.data;
+    } catch (overlapsError) {
+      // .overlaps() 可能不被支持，退回到只按品牌查询，再在前端过滤标签
+      console.warn('.overlaps() 查询失败，退回前端过滤:', overlapsError);
+      const result = await supabase
+        .from('drinks')
+        .select('*')
+        .in('brand_name', brands);
+
+      if (result.error) {
+        throw result.error;
+      }
+
+      // 在前端手动过滤：饮品的 tags 与用户选择的 tags 有交集
+      data = (result.data || []).filter(drink => {
+        const drinkTags = Array.isArray(drink.tags) ? drink.tags : [];
+        return drinkTags.some(tag => tags.includes(tag));
+      });
+    }
+
+    // 额外安全检查：如果 .overlaps() 返回了空数组，可能是因为该方法被静默忽略
+    // 这时退回到前端过滤
+    if ((!data || data.length === 0) && brands.length > 0 && tags.length > 0) {
+      console.warn('overlaps 返回空结果，尝试前端过滤');
+      const result = await supabase
+        .from('drinks')
+        .select('*')
+        .in('brand_name', brands);
+
+      if (!result.error && result.data) {
+        data = result.data.filter(drink => {
+          const drinkTags = Array.isArray(drink.tags) ? drink.tags : [];
+          return drinkTags.some(tag => tags.includes(tag));
+        });
+      }
     }
 
     return data || [];
@@ -73,14 +111,20 @@ export const getNearbyStoresFromSupabase = async (userLng, userLat, radius = 200
     // 计算每个店铺与用户的距离，并过滤在指定半径内的店铺
     const nearbyStores = stores
       .map(store => {
+        const storeLat = parseFloat(store.lat);
+        const storeLng = parseFloat(store.lng);
         const distance = calculateHaversineDistance(
-          userLat, 
-          userLng, 
-          store.lat, 
-          store.lng
+          userLat,
+          userLng,
+          storeLat,
+          storeLng
         );
         return {
-          ...store,
+          name: store.store_name,       // 统一为 name 字段，与高德数据格式一致
+          brandName: store.brand_name,   // 直接使用数据库中的品牌名
+          address: store.address || '',
+          lng: storeLng,
+          lat: storeLat,
           distance: Math.round(distance) // 转换为整数米
         };
       })
