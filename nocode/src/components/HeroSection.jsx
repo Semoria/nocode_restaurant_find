@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
-import { Check, RotateCcw, Loader2 } from 'lucide-react';
+import { Check, RotateCcw, Loader2, Navigation } from 'lucide-react';
 
 const HeroSection = ({ onAddressConfirm }) => {
   const [currentTime, setCurrentTime] = useState('');
   const [address, setAddress] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isGeoLocating, setIsGeoLocating] = useState(false);
   const [locationData, setLocationData] = useState(null);
   const [error, setError] = useState('');
 
@@ -62,6 +63,73 @@ const HeroSection = ({ onAddressConfirm }) => {
       setError('定位失败，请稍后重试');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // 一键获取当前定位
+  const handleGeoLocate = async () => {
+    if (!navigator.geolocation) {
+      setError('您的浏览器不支持定位功能');
+      return;
+    }
+
+    setIsGeoLocating(true);
+    setError('');
+
+    try {
+      const position = await new Promise((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 0
+        });
+      });
+
+      const { longitude, latitude } = position.coords;
+
+      // 高德逆地理编码：坐标 → 地址
+      const response = await fetch(
+        `https://restapi.amap.com/v3/geocode/regeo?key=9deea9030329e7a129ec9c5bb57d052a&location=${longitude},${latitude}&output=JSON`
+      );
+      const data = await response.json();
+
+      if (data.status === '1' && data.regeocode) {
+        const formatted = data.regeocode.formatted_address;
+        const city = data.regeocode.addressComponent?.city ||
+                     data.regeocode.addressComponent?.province || '';
+
+        const locationInfo = {
+          lng: longitude,
+          lat: latitude,
+          formatted_address: formatted,
+          city: Array.isArray(city) ? city[0] || '' : city
+        };
+
+        setAddress(formatted);
+        setLocationData(locationInfo);
+        onAddressConfirm(locationInfo);
+
+        setTimeout(() => {
+          const secondSection = document.querySelector('[data-second-section]');
+          if (secondSection) {
+            secondSection.scrollIntoView({ behavior: 'smooth' });
+          }
+        }, 100);
+      } else {
+        setError('逆地理编码失败，请手动输入地址');
+      }
+    } catch (err) {
+      if (err.code === 1) {
+        setError('定位权限被拒绝，请在浏览器设置中允许定位');
+      } else if (err.code === 2) {
+        setError('无法获取定位信息，请手动输入地址');
+      } else if (err.code === 3) {
+        setError('定位超时，请检查网络后重试');
+      } else {
+        setError('定位失败，请手动输入地址');
+      }
+    } finally {
+      setIsGeoLocating(false);
     }
   };
 
