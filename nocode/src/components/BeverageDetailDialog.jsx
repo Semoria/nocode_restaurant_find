@@ -4,6 +4,7 @@ import { Heart, CheckCircle, Zap, Info, X } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { getDeviceId } from '@/lib/deviceId';
+import { toast } from 'sonner';
 
 const BeverageDetailDialog = ({ beverage, open, onOpenChange }) => {
   const [isFavorited, setIsFavorited] = useState(false);
@@ -11,16 +12,26 @@ const BeverageDetailDialog = ({ beverage, open, onOpenChange }) => {
 
   // 打开弹窗时检查是否已收藏
   useEffect(() => {
+    // 立即重置收藏状态，避免切换饮品时残留上一杯的状态
+    setIsFavorited(false);
     if (!beverage || !open) return;
     const checkFavorite = async () => {
-      const deviceId = getDeviceId();
-      const { data } = await supabase
-        .from('favorites')
-        .select('id')
-        .eq('device_id', deviceId)
-        .eq('beverage_key', `${beverage.brand}::${beverage.beverage_name}`)
-        .maybeSingle();
-      setIsFavorited(!!data);
+      try {
+        const deviceId = getDeviceId();
+        const { data, error } = await supabase
+          .from('favorites')
+          .select('id')
+          .eq('device_id', deviceId)
+          .eq('beverage_key', `${beverage.brand}::${beverage.beverage_name}`)
+          .maybeSingle();
+        if (error) {
+          console.error('检查收藏状态失败:', error);
+          return;
+        }
+        setIsFavorited(!!data);
+      } catch (err) {
+        console.error('检查收藏状态失败:', err);
+      }
     };
     checkFavorite();
   }, [beverage, open]);
@@ -33,14 +44,15 @@ const BeverageDetailDialog = ({ beverage, open, onOpenChange }) => {
 
     try {
       if (isFavorited) {
-        await supabase
+        const { error } = await supabase
           .from('favorites')
           .delete()
           .eq('device_id', deviceId)
           .eq('beverage_key', beverageKey);
+        if (error) throw error;
         setIsFavorited(false);
       } else {
-        await supabase
+        const { error } = await supabase
           .from('favorites')
           .insert({
             device_id: deviceId,
@@ -50,10 +62,12 @@ const BeverageDetailDialog = ({ beverage, open, onOpenChange }) => {
                                        // 如果你写 JSON.stringify(beverage) 会导致双重编码，
                                        // 读取时需要 parse 两次才能拿到对象。
           });
+        if (error) throw error;
         setIsFavorited(true);
       }
     } catch (err) {
       console.error('收藏操作失败:', err);
+      toast.error('操作失败，请重试');
     }
     setFavoriteLoading(false);
   };
