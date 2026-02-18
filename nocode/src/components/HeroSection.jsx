@@ -144,7 +144,7 @@ const HeroSection = ({ onAddressConfirm }) => {
         </div>
 
         <div className="flex flex-col sm:flex-row gap-2 max-w-2xl mx-auto">
-          {/* 地址输入框 */}
+          {/* 地址输入框：所有尺寸全宽 */}
           <div className="flex-1 relative">
             <input
               type="text"
@@ -157,41 +157,48 @@ const HeroSection = ({ onAddressConfirm }) => {
             />
           </div>
 
-          {/* 一键定位按钮 */}
-          <button
-            onClick={handleIPLocate}
-            disabled={anyLoading}
-            title="通过IP自动定位当前城市"
-            className="w-full sm:w-auto px-4 py-2.5 bg-white border border-brand-border text-brand-primary rounded-lg hover:bg-brand-light transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
-          >
-            {isIPLocating ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                <span>定位中…</span>
-              </>
-            ) : (
-              <>
-                <LocateFixed className="h-4 w-4" />
-                <span>定位</span>
-              </>
-            )}
-          </button>
+          {/*
+            移动端：两个按钮并排占满一行（flex gap-2）
+            桌面端：sm:contents 让此 div 对 flex 布局透明，
+                    两个按钮作为独立 flex 子项与输入框同行
+          */}
+          <div className="flex gap-2 sm:contents">
+            {/* 一键定位按钮 */}
+            <button
+              onClick={handleIPLocate}
+              disabled={anyLoading}
+              title="通过IP自动定位当前城市"
+              className="flex-1 sm:flex-none sm:w-auto px-4 py-2.5 bg-white border border-brand-border text-brand-primary rounded-lg hover:bg-brand-light transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
+            >
+              {isIPLocating ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span>定位中…</span>
+                </>
+              ) : (
+                <>
+                  <LocateFixed className="h-4 w-4" />
+                  <span>定位</span>
+                </>
+              )}
+            </button>
 
-          {/* 确认按钮 */}
-          <button
-            onClick={handleConfirm}
-            disabled={anyLoading || !address.trim()}
-            className="w-full sm:w-auto px-6 py-2.5 bg-brand-primary text-white rounded-lg hover:bg-brand-accent transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-          >
-            {isLoading ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                <span>确认中…</span>
-              </>
-            ) : (
-              '确认'
-            )}
-          </button>
+            {/* 确认按钮 */}
+            <button
+              onClick={handleConfirm}
+              disabled={anyLoading || !address.trim()}
+              className="flex-1 sm:flex-none sm:w-auto px-6 py-2.5 bg-brand-primary text-white rounded-lg hover:bg-brand-accent transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            >
+              {isLoading ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span>确认中…</span>
+                </>
+              ) : (
+                '确认'
+              )}
+            </button>
+          </div>
         </div>
 
         {/* 错误提示 */}
