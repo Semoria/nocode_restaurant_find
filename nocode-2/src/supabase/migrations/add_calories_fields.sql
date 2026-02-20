@@ -1,0 +1,6 @@
+-- B站热量数据字段扩展
+ALTER TABLE beverages ADD COLUMN IF NOT EXISTS calories_kcal NUMERIC(6,1);
+ALTER TABLE beverages ADD COLUMN IF NOT EXISTS sugar_grams NUMERIC(5,1);
+ALTER TABLE beverages ADD COLUMN IF NOT EXISTS fat_grams NUMERIC(5,1);
+ALTER TABLE beverages ADD COLUMN IF NOT EXISTS caffeine_mg NUMERIC(5,1);
+ALTER TABLE beverages ADD COLUMN IF NOT EXISTS calories_source TEXT DEFAULT '';
